@@ -7,6 +7,10 @@ This is a temporary script file.
 import pandas as pd
 import os,sys
 import argparse as ap
+import gzip
+from Bio import SeqIO
+import re
+
 
 def getInputFiles(indir,inputFormat):
     
@@ -65,6 +69,43 @@ def arguments():
         sys.exit(1)
         
     return indir,outdir
+
+def genbankToFasta(genbank_file):
+
+    name = re.search(r'(G.+)_genomic.gbff.gz', genbank_file)
+    
+    fasta_file = name.group(1) + '.faa'
+    
+   
+    g_file = gzip.open(genbank_file, 'rb')
+    f_file = open(fasta_file, 'w')
+    
+    organism = ''
+    
+    for record in SeqIO.parse(g_file, 'genbank'):
+        if record.features:
+            for feature in record.features:
+                if feature.type == 'source':
+                    
+                    if 'organism' in feature.qualifiers:
+                        organism = str(feature.qualifiers['organism'][0])
+                if feature.type == 'CDS':
+                    
+                    if 'protein_id' in feature.qualifiers and 'locus_tag' in feature.qualifiers and 'product' in feature.qualifiers and 'translation' in feature.qualifiers:
+                        
+                        f_file.write('>' + str(feature.qualifiers['protein_id'][0]) + '|')
+
+                        f_file.write(str(feature.qualifiers['locus_tag'][0]) + '|')
+
+                        f_file.write(str(feature.qualifiers['product'][0]) + '|[' + organism + ']')
+
+                        translation = str(feature.qualifiers['translation'][0])
+                        
+                        for i in range(0, len(translation), 81):
+                            translation = translation[:i] + '\n' + translation[i:]
+                        f_file.write(translation + '\n')
+    f_file.close()
+    g_file.close()
 
 if __name__ == "__main__":
     
