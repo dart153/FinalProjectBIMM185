@@ -8,11 +8,15 @@ import pandas as pd
 import os,sys
 import argparse as ap
 
-def getInputFiles(indir):
+def getInputFiles(indir,inputFormat):
     
     for file in os.listdir(indir):
         
-        pass        
+        if inputFormat == 'genbank':
+            
+            pass
+        
+        
 
 
 def validateDir(directory):
