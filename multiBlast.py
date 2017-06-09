@@ -12,13 +12,13 @@ from Bio import SeqIO
 import re
 
 
-def getInputFiles(indir,inputFormat):
+def getInputFiles(indir,inputFormat,outdir):
     
     for file in os.listdir(indir):
         
         if inputFormat == 'genbank':
             
-            pass
+            infile = genbankToFasta(file,outdir)
         
         
 
@@ -51,17 +51,15 @@ def arguments():
     outdir = args.outdir
     inputFormat = args.inputFormat
     
-    #if not validateDir(indir):
+    if not validateDir(indir):
     
-        #print("Invalid Path to Input Directory")
-        #parser.print_help()
-        #sys.exit(1)
+        print("Invalid Path to Input Directory")
+        parser.print_help()
+        sys.exit(1)
         
     if inputFormat in ['genbank','fasta']:
         
-        if inputFormat == 'genbank':
-            
-            print("in Genebank")
+        getInputFiles(indir,inputFormat,outdir)
     else:
     
         print("Invalid Input File Format")
@@ -70,11 +68,11 @@ def arguments():
         
     return indir,outdir
 
-def genbankToFasta(genbank_file):
+def genbankToFasta(genbank_file,outdir):
 
     name = re.search(r'(G.+)_genomic.gbff.gz', genbank_file)
     
-    fasta_file = name.group(1) + '.faa'
+    fasta_file = outdir+"/fastas/"+name.group(1) + '.faa'
     
    
     g_file = gzip.open(genbank_file, 'rb')
@@ -106,6 +104,8 @@ def genbankToFasta(genbank_file):
                         f_file.write(translation + '\n')
     f_file.close()
     g_file.close()
+    
+    return fasta_file
 
 if __name__ == "__main__":
     
