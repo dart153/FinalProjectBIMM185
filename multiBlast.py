@@ -43,8 +43,7 @@ class Genome:
                 print(record.id)
         else:
             
-            pass
-            #with gzip.open(self.path) as f:
+            with gzip.open(self.path) as f:
                 
                 #for record in SeqIO.parse(f,'fasta'):
                     
@@ -96,9 +95,8 @@ def getInputFiles(indir,inputFormat,outdir):
             
             infile = genbankToFasta(file,outdir)
             
-            path = indir + '/' + infile
             
-            genome = Genome(path,outdir)
+            genome = Genome(infile,outdir)
             
             
             genomes.append(genome)
@@ -225,7 +223,12 @@ def genbankToFasta(genbank_file,outdir):
 
     name = re.search(r'(G.+)_genomic.gbff.gz', genbank_file)
     
-    fasta_file = outdir+"/fastas/"+name.group(1) + '.faa'
+    outdir = outdir + '/fastas'
+    
+    if not os.path.exists(outdir):
+            os.makedirs(outdir)
+    
+    fasta_file = outdir+ '/'+name.group(1) + '.faa'
     
    
     g_file = gzip.open(genbank_file, 'rb')
