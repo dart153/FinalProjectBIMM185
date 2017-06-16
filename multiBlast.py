@@ -244,10 +244,11 @@ def genbankToFasta(genbank_file,outdir):
             for feature in record.features:
                 
                 if feature.type == 'CDS':
- 
+                        
+                    if 'protein_id' in feature.qualifiers and 'locus_tag' in feature.qualifiers and 'translation' in feature.qualifiers:
                         f_file.write('>' + str(feature.qualifiers['protein_id'][0]) + '|')
 
-                        f_file.write(str(feature.qualifiers['locus_tag'][0]) + '\n')
+                        f_file.write(str(feature.qualifiers['locus_tag'][0]))
 
                         translation = str(feature.qualifiers['translation'][0])
                         
