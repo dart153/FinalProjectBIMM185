@@ -84,6 +84,17 @@ class Orthologs:
         
         pass
         
+class Paralogs:
+    
+    def __init__(self, genome1, genome2):
+        
+        pass
+        
+    def runBlastP(self):
+        
+        pass
+        
+        
 def getInputFiles(indir,inputFormat,outdir):
     
     global genomes
@@ -238,7 +249,6 @@ def genbankToFasta(genbank_file,outdir):
     g_file = gzip.open(genbank_file, 'rb')
     f_file = open(fasta_file, 'w')
     
-    organism = ''
     
     for record in SeqIO.parse(g_file, 'genbank'):
         if record.features:
