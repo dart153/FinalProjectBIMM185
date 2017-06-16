@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#! /usr/bin/env python
 """
 Spyder Editor
 
@@ -6,129 +6,200 @@ This is a temporary script file.
 """
 import pandas as pd
 import os,sys
+import numpy as np
 import subprocess as sp
 import argparse as ap
 import gzip
+import itertools
 from Bio import SeqIO
 import re
 
 class Genome:
-    
+
     def __init__(self,path,outdir):
-        
+
         self.name = ''
         self.path = path
         self.blastdb = outdir+'/blastdb'
-        
-        
+
+
         #A list of the proteins
         self.proteins = []
-        
+
         self.getName()
         self.readFile()
         self.makeBlastDB()
-        
+
     def getName(self):
-        
+
         filename = os.path.basename(self.path)
-        
+
         self.name = re.match(r'([\w]+).',filename).group(1)
-    
+
     def readFile(self):
 
-        if os.path.basename(self.path).split('.')[-1] == '.faa':
-        
+        print(os.path.basename(self.path).split('.')[-1])
+
+        if os.path.basename(self.path).split('.')[-1] == 'faa':
+
             for record in SeqIO.parse(self.path,'fasta'):
-                
-                print(record.id)
+
+                self.proteins.append(record.id)
         else:
-            
+
             with gzip.open(self.path) as f:
-                
-                pass
-                #for record in SeqIO.parse(f,'fasta'):
-                    
-                    #print(record.id)
-                
-                #self.proteins.append(record.id)
-    
+
+                for record in SeqIO.parse(f,'fasta'):
+
+                    self.proteins.append(record.id)
+
     def makeBlastDB(self):
-        
+
         self.blastdb = self.blastdb + '/{}'.format(self.name)
-        
+
         if not os.path.exists(self.blastdb):
             os.makedirs(self.blastdb)
-        
+
+        command = ''
+
         if os.path.basename(self.path).split('.')[-1] == 'gz':
-        
-            print('gzcat')
+
             command = 'gzcat {} | makeblastdb -dbtype prot -input_type fasta '.format(self.path)
             command += '-parse_seqids -hash_index -out ./{} -title {} -in -'.format(self.blastdb,self.name)
-        
-        
+
+
         else:
-        
+
             command = 'makeblastdb -in {} -dbtype prot -input_type fasta '.format(self.path)
             command += '-parse_seqids -hash_index -out ./{} -title {}'.format(self.blastdb,self.name)
-        
-        os.system(command)      
-        
-        
+
+        os.system(command)
+
+
 class Orthologs:
-    
-    def __init__(self,genome1,genome2):
-        
-        pass
-    
-    def runBlastP(self):
-        
-        pass
-        
+
+    def __init__(self,genome1,genome2,outdir,evalue,ident,scov):
+
+        self.g1 = genome1
+        self.g2 = genome2
+        self.outdir = outdir +'/results'
+        self.evalue = evalue
+        self.ident = ident
+        self.scov = scov
+
+        #store the results
+
+        self.columns = ['qseqid','sseqid','evalue','pident','length','slen']
+
+
+        if not os.path.exists(self.outdir):
+            os.makedirs(self.outdir)
+
+        print('Evaluating {} and {} for orthologs'.format(self.g1.name,self.g2.name))
+
+        #Run the blasts
+        table1 = self.runBlastP(self.g1,self.g2)
+        table2 = self.runBlastP(self.g2,self.g1)
+
+        #Calculate orthologs
+        self.BDBH(table1,table2)
+
+    def runBlastP(self,g1,g2):
+
+        results = '{}/{}_vs_{}.tsv'.format(self.outdir,g1.name,g2.name)
+
+        command = ''
+        if not os.path.exists(results):
+            #os.system('touch {}'.format(results))
+            if os.path.basename(g1.path).split('.')[-1] == 'gz':
+
+                command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
+                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen' ".format(g2.blastdb,self.evalue)
+
+            else:
+
+                command = 'blastp -query {} -out {} '.format(g1.path,results)
+                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen'".format(g2.blastdb,self.evalue)
+
+            os.system(command)
+
+        #Read into table
+        return self.loadToTable(results)
+
+    def loadToTable(self,results):
+
+        table = pd.read_table(results,header=None,sep='\t',names=self.columns)
+
+        return self.processTable(table)
+
+    def processTable(self,table):
+
+        table['scov'] = np.NaN
+
+        for index,row in table.iterrows():
+
+            #print(row)
+            sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+            table.set_value(index,'sseqid',sseqid)
+
+            scov= (float(row[4])/float(row[5]))*100
+            table.set_value(index,'scov',scov)
+
+        print(table.head())
+
+        return table
+
+    def BDBH(self,table1,table2):
+
+        #queries = self.table1.loc['qseqid'].unique()
+
+        print(table1.describe())
+
 class Paralogs:
-    
+
     def __init__(self, genome):
-        
+
         self.genome = genome
-        
+
     def runBlastP(self):
-        
-        
-        cmd = 'blastp -query %s -out blast_%s.out -db %s evalue %i perc_identity %s -outfmt \'6 qcovs\'' % 
-        
+
+        pass
+        #cmd = 'blastp -query %s -out blast_%s.out -db %s evalue %i perc_identity %s -outfmt \'6 qcovs\'' %
+
         #load into pandas dataframe
         #get things evalue lower other 2 higher than cutoff
         #ignore self hits (subj & target are same)
-        
+
 def getInputFiles(indir,inputFormat,outdir):
-    
+
     global genomes
-    
+
     for file in os.listdir(indir):
-        
+
         #print(os.path.basename(file))
-        
+
         if not os.path.isdir(file):
-        
+
             if inputFormat == 'genbank':
-                
+
                 path = indir + '/' + file
-            
+
                 infile = genbankToFasta(path,outdir)
-            
-            
+
+
                 genome = Genome(infile,outdir)
-            
-            
+
+
                 genomes.append(genome)
-            
+
             else:
-                
+
                 path = indir + '/' + file
                 genome = Genome(path,outdir)
-            
+
                 genomes.append(genome)
-        
-        
+
+
 
 '''
 Validates the existence of the directory that is passed in as
@@ -138,26 +209,26 @@ an argument.
  genomes for comparison
 '''
 def validateDir(directory):
-    
+
     if os.path.isdir(directory):
-        
+
         return True
     else:
-        
+
         return False
 
 
 def arguments():
-    
+
     global indir
     global outdir
     global inputFormat
     global evalue
     global ident
     global scov
-    
+
     desc = "A generalized tool for performing blasts on any number of genomes."
-    
+
     parser = ap.ArgumentParser(description=desc)
     parser.add_argument('-i','--input',
                         action='store',
@@ -189,50 +260,43 @@ def arguments():
                         type=float,
                         default=0.8,
                         help='The minimum percentage of the smaller protein covered.')
-    
+
     args = parser.parse_args()
-    
+
     indir = args.indir
     outdir = args.outdir
     inputFormat = args.inputFormat
     evalue = args.eval
     ident = args.ident
     scov = args.scov
-    
+
     #Check for input directory
     if not validateDir(indir):
-    
+
         print("Invalid Path to Input Directory")
         parser.print_help()
         sys.exit(1)
-    
+
     #Check for output directory
     if not outdir:
-        
+
         print("No Output Directory Provided.")
         parser.print_help()
         sys.exit(1)
-        
+
 
     #check if input format is valid
     if inputFormat in ['genbank','fasta']:
-        
+
         getInputFiles(indir,inputFormat,outdir)
     else:
-    
+
         print("Invalid Input File Format")
         parser.print_help()
         sys.exit(1)
-    
-    
-    if ident < 0 or ident > 1:
-        
-        print("Invalid identity value.")
-        parser.print_help()
-        sys.exit(1)
-        
-        
-        
+
+
+
     return indir,outdir
 
 
@@ -240,42 +304,53 @@ def arguments():
 def genbankToFasta(genbank_file,outdir):
 
     name = re.search(r'(G.+)_genomic.gbff.gz', genbank_file)
-    
+
     outdir = outdir + '/fastas'
-    
+
     if not os.path.exists(outdir):
             os.makedirs(outdir)
-    
+
     fasta_file = outdir+ '/'+name.group(1) + '.faa'
-    
-   
+
+
     g_file = gzip.open(genbank_file, 'rb')
     f_file = open(fasta_file, 'w')
-    
-    
+
+
     for record in SeqIO.parse(g_file, 'genbank'):
+
         if record.features:
             for feature in record.features:
-                
+
                 if feature.type == 'CDS':
-                        
+
                     if 'protein_id' in feature.qualifiers and 'locus_tag' in feature.qualifiers and 'translation' in feature.qualifiers:
                         f_file.write('>' + str(feature.qualifiers['protein_id'][0]) + '|')
 
                         f_file.write(str(feature.qualifiers['locus_tag'][0]))
 
                         translation = str(feature.qualifiers['translation'][0])
-                        
+
                         for i in range(0, len(translation), 81):
                             translation = translation[:i] + '\n' + translation[i:]
                         f_file.write(translation + '\n')
     f_file.close()
     g_file.close()
-    
+
     return fasta_file
 
+def findOrthologs():
+
+    if len(genomes) > 1:
+        comparisons = itertools.combinations(genomes,2)
+
+
+        for comp in comparisons:
+
+            ortholog = Orthologs(comp[0],comp[1],outdir,evalue,ident,scov)
+
 if __name__ == "__main__":
-    
+
     #global variables
     global indir
     global outdir
@@ -283,10 +358,9 @@ if __name__ == "__main__":
     global ident
     global scov
     global genomes
-    
-    
-    genomes = []
-    
-    indir,outdir = arguments()
 
-    
+
+    genomes = []
+
+    indir,outdir = arguments()
+    findOrthologs()
