@@ -211,19 +211,12 @@ def genbankToFasta(genbank_file,outdir):
     for record in SeqIO.parse(g_file, 'genbank'):
         if record.features:
             for feature in record.features:
-                if feature.type == 'source':
-                    
-                    if 'organism' in feature.qualifiers:
-                        organism = str(feature.qualifiers['organism'][0])
+                
                 if feature.type == 'CDS':
-                    
-                    if 'protein_id' in feature.qualifiers and 'locus_tag' in feature.qualifiers and 'product' in feature.qualifiers and 'translation' in feature.qualifiers:
-                        
+ 
                         f_file.write('>' + str(feature.qualifiers['protein_id'][0]) + '|')
 
-                        f_file.write(str(feature.qualifiers['locus_tag'][0]) + '|')
-
-                        f_file.write(str(feature.qualifiers['product'][0]) + '|[' + organism + ']')
+                        f_file.write(str(feature.qualifiers['locus_tag'][0]) + '\n')
 
                         translation = str(feature.qualifiers['translation'][0])
                         
