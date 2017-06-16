@@ -86,14 +86,18 @@ class Orthologs:
         
 class Paralogs:
     
-    def __init__(self, genome1, genome2):
+    def __init__(self, genome):
         
-        pass
+        self.genome = genome
         
     def runBlastP(self):
         
-        pass
         
+        cmd = 'blastp -query %s -out blast_%s.out -db %s evalue %i perc_identity %s -outfmt \'6 qcovs\'' % 
+        
+        #load into pandas dataframe
+        #get things evalue lower other 2 higher than cutoff
+        #ignore self hits (subj & target are same)
         
 def getInputFiles(indir,inputFormat,outdir):
     
