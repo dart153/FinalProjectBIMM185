@@ -45,6 +45,7 @@ class Genome:
             
             with gzip.open(self.path) as f:
                 
+                pass
                 #for record in SeqIO.parse(f,'fasta'):
                     
                     #print(record.id)
