@@ -92,24 +92,27 @@ def getInputFiles(indir,inputFormat,outdir):
         
         #print(os.path.basename(file))
         
-        if inputFormat == 'genbank' and os.path.isfile(file):
+        if not os.path.isdir(file):
+        
+            if inputFormat == 'genbank':
+                
+                path = indir + '/' + file
             
-            infile = genbankToFasta(file,outdir)
+                infile = genbankToFasta(path,outdir)
             
             
-            genome = Genome(infile,outdir)
+                genome = Genome(infile,outdir)
             
             
-            genomes.append(genome)
+                genomes.append(genome)
             
-        else:
+            else:
+                
+                path = indir + '/' + file
+                genome = Genome(path,outdir)
             
-            path = indir + '/' + file
-            genome = Genome(path,outdir)
             
-            print(genome.name)
-            
-            genomes.append(genome)
+                genomes.append(genome)
         
         
 
