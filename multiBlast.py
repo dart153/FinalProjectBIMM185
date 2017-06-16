@@ -43,26 +43,36 @@ class Genome:
                 print(record.id)
         else:
             
-            with gzip.open(self.path) as f:
+            pass
+            #with gzip.open(self.path) as f:
                 
-                for record in SeqIO.parse(f,'fasta'):
+                #for record in SeqIO.parse(f,'fasta'):
                     
-                    print(record.id)
+                    #print(record.id)
                 
                 #self.proteins.append(record.id)
     
     def makeBlastDB(self):
-        
         
         self.blastdb = self.blastdb + '/{}'.format(self.name)
         
         if not os.path.exists(self.blastdb):
             os.makedirs(self.blastdb)
         
-        command = 'gzcat {} | makeblastdb -dbtype prot -input_type fasta '.format(self.path)
-        command += '-parse_seqids -hash_index -out ./{} -title {} -in -'.format(self.blastdb,self.name)
+        if os.path.basename(self.path).split('.')[-1] == 'gz':
         
-        os.system(command)
+            print('gzcat')
+            command = 'gzcat {} | makeblastdb -dbtype prot -input_type fasta '.format(self.path)
+            command += '-parse_seqids -hash_index -out ./{} -title {} -in -'.format(self.blastdb,self.name)
+        
+        
+        else:
+        
+            command = 'makeblastdb -in {} -dbtype prot -input_type fasta '.format(self.path)
+            command += '-parse_seqids -hash_index -out ./{} -title {}'.format(self.blastdb,self.name)
+        
+        os.system(command)      
+        
         
 class Orthologs:
     
