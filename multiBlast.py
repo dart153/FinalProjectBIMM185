@@ -22,9 +22,10 @@ class Genome:
         
         
         #A list of the proteins
-        proteins = []
+        self.proteins = []
         
         self.getName()
+        self.readFile()
         self.makeBlastDB()
         
     def getName(self):
@@ -35,7 +36,20 @@ class Genome:
     
     def readFile(self):
 
-        pass
+        if os.path.basename(self.path).split('.')[-1] == '.faa':
+        
+            for record in SeqIO.parse(self.path,'fasta'):
+                
+                print(record.id)
+        else:
+            
+            with gzip.open(self.path) as f:
+                
+                for record in SeqIO.parse(f,'fasta'):
+                    
+                    print(record.id)
+                
+                #self.proteins.append(record.id)
     
     def makeBlastDB(self):
         
@@ -183,7 +197,8 @@ def arguments():
         print("Invalid Input File Format")
         parser.print_help()
         sys.exit(1)
-        
+    
+    
     if ident < 0 or ident > 1:
         
         print("Invalid identity value.")
