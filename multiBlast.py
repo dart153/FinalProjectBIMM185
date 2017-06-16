@@ -122,7 +122,6 @@ def getInputFiles(indir,inputFormat,outdir):
                 path = indir + '/' + file
                 genome = Genome(path,outdir)
             
-            
                 genomes.append(genome)
         
         
