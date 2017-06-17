@@ -78,13 +78,13 @@ class Genome:
 
 class Orthologs:
 
-    def __init__(self,genome1,genome2,outdir,evalue,ident,scov):
+    def __init__(self,genome1,genome2,outdir,evalue,pident,scov):
 
         self.g1 = genome1
         self.g2 = genome2
         self.outdir = outdir +'/results'
         self.evalue = evalue
-        self.ident = ident
+        self.pident = pident
         self.scov = scov
 
         #store the results
@@ -110,7 +110,7 @@ class Orthologs:
 
         command = ''
         if not os.path.exists(results):
-            #os.system('touch {}'.format(results))
+
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
                 command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
@@ -139,7 +139,7 @@ class Orthologs:
         for index,row in table.iterrows():
 
             #print(row)
-            sseqid= re.match(r'\|*([\w\_\.]+)\|',str(row[1])).group(1) # I changed this because mine didn't have the ref part (not sure why)
+            sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1) # I changed this because mine didn't have the ref part (not sure why)
             table.set_value(index,'sseqid',sseqid)
 
             scov= (float(row[4])/float(row[5]))*100
@@ -151,9 +151,60 @@ class Orthologs:
 
     def BDBH(self,table1,table2):
 
-        #queries = self.table1.loc['qseqid'].unique()
+        orthologs = open('{}/{}vs{}_ortho.txt'.format(self.outdir,self.g1.name,self.g2.name),'w+')
 
-        print(table1.describe())
+        orthologs.write('{}\t{}\n'.format('\t'.join(self.columns),'status'))
+
+        queries = table1.qseqid.unique()
+
+        for query in queries:
+
+            #Subset and sort the list with only the particular query
+            comparisons = self.subset(table1,query)
+
+            if comparisons.shape[0] > 0:
+                subject = comparisons['sseqid'].iloc[0]
+
+                subjectHits = self.subset(table2,subject)
+
+                if subjectHits.shape[0] > 0:
+                    if query == subjectHits['sseqid'].iloc[0]:
+
+                        orthologs.write('{}\t{}\n'.format(self.rowToString(subjectHits.iloc[0]),'BDBH'))
+                    else:
+
+                        self.topHits(subjectHits,orthologs)
+
+        orthologs.close()
+
+    def topHits(self,table,file):
+
+        comparisons = table.loc[table['evalue'] == table['evalue'].iloc[0]]
+
+        if comparisons.shape[0] > 0:
+            for index,row in comparisons.iterrows():
+
+                file.write('{}\t{}\n'.format(self.rowToString(row),'TOP'))
+
+
+    def subset(self,table,query):
+
+        #Subset the table based on each of the parameters
+        comparisons = table.loc[table['qseqid'] == query]
+        comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
+        comparisons = comparisons.loc[comparisons['pident'] >= self.pident]
+        comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
+
+        comparisons = comparisons.sort_values(['evalue','pident','scov'], ascending=[True,False,False])
+
+        return comparisons
+
+    def rowToString(self,row):
+
+        row = row.tolist()
+
+        return '\t'.join([str(i) for i in row])
+
 
 class Paralogs:
 
@@ -166,13 +217,14 @@ class Paralogs:
         self.scov = scov
         self.pairs = []
         
+
         self.columns = ['qseqid','sseqid','evalue','ident','length','slen']
-        
+
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
 
         print('Evaluating {} for paralogs'.format(self.g1.name))
-        
+
         #Run blast
         table = self.runBlastP(self.g1)
         print(table.head())
@@ -182,7 +234,7 @@ class Paralogs:
     def runBlastP(self, g1):
 
         results = '{}/{}.tsv'.format(self.outdir,g1.name)
-        
+
         command = ''
         if not os.path.exists(results):
 
@@ -197,21 +249,20 @@ class Paralogs:
                 command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen'".format(g1.blastdb,self.evalue)
 
             os.system(command)
-            
+
         return self.loadToTable(results)
         
    
-        
         #load into pandas dataframe
         #get things evalue lower other 2 higher than cutoff
         #ignore self hits (subj & target are same)
-        
+
     def loadToTable(self,results):
 
         table = pd.read_table(results,header=None,sep='\t',names=self.columns)
 
         return self.processTable(table)
-        
+
     def processTable(self,table):
 
         table['scov'] = np.NaN
@@ -222,21 +273,41 @@ class Paralogs:
             #if [row[1], row[0]] not in self.pairs:
             #self.pairs.append([row[0], row[1]])
             scov = (float(row[4])/float(row[5]))*100
+
+            sseqid= re.match(r'\|*([\w\_\.]+)\|',str(row[1])).group(1)
+            table.set_value(index,'sseqid',sseqid)
+
+            qseqid = re.match(r'\|*([\w\_\.]+)\|*',str(row[0])).group(1)
+            table.set_value(index,'qseqid',sseqid)
+
+            # ignore self hits
+
+
+
+            scov= (float(row[4])/float(row[5]))*100
             table.set_value(index,'scov',scov)
 
         table = self.subset(table)
 
         return table
-        
+
+
+    def BDBH(self,table):
+
+        #queries = self.table1.loc['qseqid'].unique()
+
+        print(table.describe())
+
+
     def subset(self, table):
         comparisons = table
         comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
         comparisons = comparisons.loc[comparisons['ident'] >= self.ident]
         comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
         comparisons = comparisons.loc[comparisons['qseqid'] != comparisons['sseqid']]
-        
+
         comparisons = comparisons.sort_values(['evalue','ident', 'scov'], ascending = [True, False, False])
-        
+
         return comparisons
         
     #
@@ -246,6 +317,7 @@ class Paralogs:
                 self.pairs.append([row[0], row[1]])
                 print row
         
+
 
 def getInputFiles(indir,inputFormat,outdir):
 
@@ -428,7 +500,7 @@ def findParalogs():
 
     for genome in genomes:
         paralog = Paralogs(genome,outdir,evalue,ident,scov)
-            
+
 if __name__ == "__main__":
 
     #global variables
