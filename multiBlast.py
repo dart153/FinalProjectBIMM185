@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 """
-Spyder Editor
-
-This is a temporary script file.
+multiBlast is a generalized tool that allows for multiple proteomes
+in Genbank or FASTA format to be BLASTed and compared for both orthologs
+and paralogs.
 """
 import pandas as pd
 import os,sys
@@ -36,8 +36,6 @@ class Genome:
         self.name = re.match(r'([\w]+).',filename).group(1)
 
     def readFile(self):
-
-        print(os.path.basename(self.path).split('.')[-1])
 
         if os.path.basename(self.path).split('.')[-1] == 'faa':
 
@@ -73,6 +71,13 @@ class Genome:
             command += '-parse_seqids -hash_index -out ./{} -title {}'.format(self.blastdb,self.name)
 
         os.system(command)
+
+
+    def removeHomolog(self,id):
+
+        if id in self.proteins:
+
+            self.proteins.remove(id)
 
 
 class Orthologs:
@@ -144,8 +149,6 @@ class Orthologs:
             scov= (float(row[4])/float(row[5]))*100
             table.set_value(index,'scov',scov)
 
-        print(table.head())
-
         return table
 
     def BDBH(self,table1,table2):
@@ -169,6 +172,11 @@ class Orthologs:
                 if subjectHits.shape[0] > 0:
                     if query == subjectHits['sseqid'].iloc[0]:
 
+                        #Proteins are not orphans
+                        self.g1.removeHomolog(query)
+                        self.g2.removeHomolog(subject)
+
+                        #Write Pair to file
                         orthologs.write('{}\t{}\n'.format(self.rowToString(subjectHits.iloc[0]),'BDBH'))
                     else:
 
@@ -181,8 +189,12 @@ class Orthologs:
         comparisons = table.loc[table['evalue'] == table['evalue'].iloc[0]]
 
         if comparisons.shape[0] > 0:
+
+            self.g2.removeHomolog(table['qseqid'].iloc[0])
+
             for index,row in comparisons.iterrows():
 
+                self.g1.removeHomolog(row['sseqid'])
                 file.write('{}\t{}\n'.format(self.rowToString(row),'TOP'))
 
 
@@ -269,8 +281,10 @@ class Paralogs:
         for index,row in table.iterrows():
 
             scov = (float(row[4])/float(row[5]))*100
-
             table.set_value(index,'scov',scov)
+
+            sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+            table.set_value(index,'sseqid',sseqid)
 
         # get values in the range we want
         table = self.subset(table)
@@ -295,13 +309,21 @@ class Paralogs:
         # write to tab separated output file
         output = open('{}/{}_para.tsv'.format(self.outdir,self.g1.name),'w')
         for index, row in table.iterrows():
-            if [row[1], row[0]] not in self.pairs:
-                self.pairs.append([row[0], row[1]])
-                output.write(row['qseqid'] + '\t' + row['sseqid'] + '\t' + str(row['evalue']) + '\t' + str(row['ident']) + '\t' + str(row['scov']) + '\n')
+            if row[0] != row[1]:
+                if [row[1], row[0]] not in self.pairs:
+                    self.g1.removeHomolog(row[0])
+                    self.g1.removeHomolog(row[1])
+                    self.pairs.append([row[0], row[1]])
+                    output.write(row['qseqid'] + '\t' + row['sseqid'] + '\t' + str(row['evalue']) + '\t' + str(row['ident']) + '\t' + str(row['scov']) + '\n')
         output.close()
 
 
+'''
+Determines the routine required depending on the input format.
 
+--If genbank, then the file must first be converted to fasta
+format
+'''
 def getInputFiles(indir,inputFormat,outdir):
 
     global genomes
@@ -347,7 +369,10 @@ def validateDir(directory):
 
         return False
 
-
+'''
+Reads the command line arguments and saves all
+values for use by the program.
+'''
 def arguments():
 
     global indir
@@ -357,7 +382,7 @@ def arguments():
     global ident
     global scov
 
-    desc = "A generalized tool for performing blasts on any number of genomes."
+    desc = "A generalized tool for performing blasts on any number of genomes to determine homology."
 
     parser = ap.ArgumentParser(description=desc)
     parser.add_argument('-i','--input',
@@ -430,7 +455,10 @@ def arguments():
     return indir,outdir
 
 
-
+'''
+Converts Genbank formatted files into FASTA
+formatted files for BLAST.
+'''
 def genbankToFasta(genbank_file,outdir):
 
     name = re.search(r'(G.+)_genomic.gbff.gz', genbank_file)
@@ -468,7 +496,12 @@ def genbankToFasta(genbank_file,outdir):
     g_file.close()
 
     return fasta_file
-
+'''
+Creates an instance of the ortholog class for
+each unique pair of genomes. Both genomes are BLASTed
+against each other and orthologs are determined by
+Bi-Directional Best Hit (BDBH) and Top Hit.
+'''
 def findOrthologs():
 
     if len(genomes) > 1:
@@ -479,16 +512,46 @@ def findOrthologs():
 
             ortholog = Orthologs(comp[0],comp[1],outdir,evalue,ident,scov)
 
+'''
+Creates an instance of the paralog class for each
+genome. Runs a self blast and searches for Paralogs
+based on the user-inputed parameters.
+'''
 def findParalogs():
 
     for genome in genomes:
         paralog = Paralogs(genome,outdir,evalue,ident,scov)
 
+'''
+Compiles the orphan genes of each genome into a
+file.
+'''
+def findOrphans():
+
+    for genome in genomes:
+
+        orphans = open('{}/results/{}_orph.txt'.format(outdir,genome.name),'w+')
+
+        if inputFormat == 'fasta':
+            orphans.write('{}'.format('\n'.join(genome.proteins)))
+        else:
+            for protein in genome.proteins:
+                orphans.write('{}\n'.format('\t'.join(protein.split('|'))))
+
+        orphans.close
+
+'''
+Main Method
+
+--Runs the logic of the program through the
+non class methods
+'''
 if __name__ == "__main__":
 
     #global variables
     global indir
     global outdir
+    global inputFormat
     global evalue
     global ident
     global scov
@@ -500,3 +563,4 @@ if __name__ == "__main__":
     indir,outdir = arguments()
     findOrthologs()
     findParalogs()
+    findOrphans()
