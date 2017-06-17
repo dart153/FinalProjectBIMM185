@@ -110,7 +110,7 @@ class Orthologs:
 
         command = ''
         if not os.path.exists(results):
-            
+
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
                 command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
@@ -225,9 +225,9 @@ class Paralogs:
 
         #Run blast
         table = self.runBlastP(self.g1)
+        print(table.head())
+        print(table.describe())
 
-        #Calculate orthologs
-        self.BDBH(table)
 
     def runBlastP(self, g1):
 
@@ -235,7 +235,7 @@ class Paralogs:
 
         command = ''
         if not os.path.exists(results):
-            #os.system('touch {}'.format(results))
+
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
                 command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
@@ -250,8 +250,10 @@ class Paralogs:
 
         return self.loadToTable(results)
 
-        #cmd = 'blastp -query %s -out blast_%s.out -db %s evalue %i perc_identity %s -outfmt \'6 qcovs\'' %
 
+=======
+
+>>>>>>> f3314c3d114e7d0fb83ff5a746e517fef9d73a2a
         #load into pandas dataframe
         #get things evalue lower other 2 higher than cutoff
         #ignore self hits (subj & target are same)
@@ -276,20 +278,34 @@ class Paralogs:
 
             # ignore self hits
 
+
+
             scov= (float(row[4])/float(row[5]))*100
             table.set_value(index,'scov',scov)
-            #table = table[table.loc[index, sseqid] != table.loc[index, qseqid]]
-        print table.shape
 
-        print(table.head())
+        table = self.subset(table)
 
         return table
+
 
     def BDBH(self,table):
 
         #queries = self.table1.loc['qseqid'].unique()
 
         print(table.describe())
+
+
+    def subset(self, table):
+        comparisons=table
+        comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
+        comparisons = comparisons.loc[comparisons['ident'] >= self.ident]
+        comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
+        comparisons = comparisons.loc[comparisons['qseqid'] != comparisons['sseqid']]
+
+        comparisons = comparisons.sort_values(['evalue','ident', 'scov'], ascending = [True, False, False])
+
+        return comparisons
+
 
 def getInputFiles(indir,inputFormat,outdir):
 
