@@ -22,7 +22,6 @@ class Genome:
         self.path = path
         self.blastdb = outdir+'/blastdb'
 
-
         #A list of the proteins
         self.proteins = []
 
@@ -139,7 +138,7 @@ class Orthologs:
         for index,row in table.iterrows():
 
             #print(row)
-            sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1) # I changed this because mine didn't have the ref part (not sure why)
+            sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1) 
             table.set_value(index,'sseqid',sseqid)
 
             scov= (float(row[4])/float(row[5]))*100
@@ -205,9 +204,10 @@ class Orthologs:
 
         return '\t'.join([str(i) for i in row])
 
-
+# paralogs class
 class Paralogs:
 
+    # constructor
     def __init__(self, genome, outdir, evalue, ident, scov):
 
         self.g1 = genome
@@ -217,27 +217,28 @@ class Paralogs:
         self.scov = scov
         self.pairs = []
         
-
+        # columns for paralogs
         self.columns = ['qseqid','sseqid','evalue','ident','length','slen']
 
+        # make output directory
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
 
-        print('Evaluating {} for paralogs'.format(self.g1.name))
-
         #Run blast
         table = self.runBlastP(self.g1)
-        print(table.head())
-        print(table.describe())
 
+        # write paralog data to a file
         self.writeParalogs(table)
+        
     def runBlastP(self, g1):
 
+        # output for blast data
         results = '{}/{}.tsv'.format(self.outdir,g1.name)
 
         command = ''
         if not os.path.exists(results):
 
+            # check if compressed
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
                 command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
@@ -251,31 +252,26 @@ class Paralogs:
             os.system(command)
 
         return self.loadToTable(results)
-        
-   
-        #load into pandas dataframe
-        #get things evalue lower other 2 higher than cutoff
-        #ignore self hits (subj & target are same)
 
     def loadToTable(self,results):
-
+        
+        # load raw data into pandas table
         table = pd.read_table(results,header=None,sep='\t',names=self.columns)
 
         return self.processTable(table)
 
     def processTable(self,table):
 
+        # get scov values
         table['scov'] = np.NaN
  
         for index,row in table.iterrows():
-            
-            #scov = -1
-            #if [row[1], row[0]] not in self.pairs:
-            #self.pairs.append([row[0], row[1]])
+
             scov = (float(row[4])/float(row[5]))*100
 
             table.set_value(index,'scov',scov)
 
+        # get values in the range we want
         table = self.subset(table)
 
         return table
@@ -288,12 +284,14 @@ class Paralogs:
         comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
         comparisons = comparisons.loc[comparisons['qseqid'] != comparisons['sseqid']]
 
+        # sort
         comparisons = comparisons.sort_values(['evalue','ident', 'scov'], ascending = [True, False, False])
 
         return comparisons
         
     
     def writeParalogs(self, table):
+        # write to tab separated output file
         output = open('{}/{}_para.tsv'.format(self.outdir,self.g1.name),'w')
         for index, row in table.iterrows():
             if [row[1], row[0]] not in self.pairs:
@@ -499,5 +497,5 @@ if __name__ == "__main__":
     genomes = []
 
     indir,outdir = arguments()
-    #findOrthologs()
+    findOrthologs()
     findParalogs()
