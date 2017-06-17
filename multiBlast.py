@@ -174,9 +174,9 @@ class Paralogs:
         
         #Run blast
         table = self.runBlastP(self.g1)
+        print(table.head())
+        print(table.describe())
 
-        #Calculate orthologs
-        self.BDBH(table)
 
     def runBlastP(self, g1):
 
@@ -184,7 +184,7 @@ class Paralogs:
         
         command = ''
         if not os.path.exists(results):
-            #os.system('touch {}'.format(results))
+
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
                 command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
@@ -199,8 +199,6 @@ class Paralogs:
             
         return self.loadToTable(results)
         
-        #cmd = 'blastp -query %s -out blast_%s.out -db %s evalue %i perc_identity %s -outfmt \'6 qcovs\'' %
-
         #load into pandas dataframe
         #get things evalue lower other 2 higher than cutoff
         #ignore self hits (subj & target are same)
@@ -216,29 +214,25 @@ class Paralogs:
         table['scov'] = np.NaN
 
         for index,row in table.iterrows():
-
-            sseqid= re.match(r'\|*([\w\_\.]+)\|',str(row[1])).group(1)
-            table.set_value(index,'sseqid',sseqid)
             
-            qseqid = re.match(r'\|*([\w\_\.]+)\|*',str(row[0])).group(1)
-            table.set_value(index,'qseqid',sseqid)
-            
-            # ignore self hits
 
             scov= (float(row[4])/float(row[5]))*100
             table.set_value(index,'scov',scov)
-            #table = table[table.loc[index, sseqid] != table.loc[index, qseqid]]
-        print table.shape
-
-        print(table.head())
+        
+        table = self.subset(table)
 
         return table
         
-    def BDBH(self,table):
-
-        #queries = self.table1.loc['qseqid'].unique()
-
-        print(table.describe())
+    def subset(self, table):
+        comparisons=table
+        comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
+        comparisons = comparisons.loc[comparisons['ident'] >= self.ident]
+        comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
+        comparisons = comparisons.loc[comparisons['qseqid'] != comparisons['sseqid']]
+        
+        comparisons = comparisons.sort_values(['evalue','ident', 'scov'], ascending = [True, False, False])
+        
+        return comparisons
 
 def getInputFiles(indir,inputFormat,outdir):
 
@@ -320,13 +314,13 @@ def arguments():
                         action='store',
                         dest='ident',
                         type=float,
-                        default=0.25,
+                        default=25.0,
                         help='The minimum percent identity to be considered for homology.')
     parser.add_argument('-scov',
                         action='store',
                         dest='scov',
                         type=float,
-                        default=0.8,
+                        default=80.0,
                         help='The minimum percentage of the smaller protein covered.')
 
     args = parser.parse_args()
