@@ -164,6 +164,7 @@ class Paralogs:
         self.evalue = evalue
         self.ident = ident
         self.scov = scov
+        self.pairs = []
         
         self.columns = ['qseqid','sseqid','evalue','ident','length','slen']
         
@@ -177,7 +178,7 @@ class Paralogs:
         print(table.head())
         print(table.describe())
 
-
+        self.printParalogs(table)
     def runBlastP(self, g1):
 
         results = '{}/{}.tsv'.format(self.outdir,g1.name)
@@ -199,6 +200,8 @@ class Paralogs:
             
         return self.loadToTable(results)
         
+   
+        
         #load into pandas dataframe
         #get things evalue lower other 2 higher than cutoff
         #ignore self hits (subj & target are same)
@@ -212,19 +215,21 @@ class Paralogs:
     def processTable(self,table):
 
         table['scov'] = np.NaN
-
+ 
         for index,row in table.iterrows():
             
-
-            scov= (float(row[4])/float(row[5]))*100
+            #scov = -1
+            #if [row[1], row[0]] not in self.pairs:
+            #self.pairs.append([row[0], row[1]])
+            scov = (float(row[4])/float(row[5]))*100
             table.set_value(index,'scov',scov)
-        
+
         table = self.subset(table)
 
         return table
         
     def subset(self, table):
-        comparisons=table
+        comparisons = table
         comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
         comparisons = comparisons.loc[comparisons['ident'] >= self.ident]
         comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
@@ -233,6 +238,14 @@ class Paralogs:
         comparisons = comparisons.sort_values(['evalue','ident', 'scov'], ascending = [True, False, False])
         
         return comparisons
+        
+    #
+    def printParalogs(self, table):
+        for index, row in table.iterrows():
+            if [row[1], row[0]] not in self.pairs:
+                self.pairs.append([row[0], row[1]])
+                print row
+        
 
 def getInputFiles(indir,inputFormat,outdir):
 
@@ -430,5 +443,5 @@ if __name__ == "__main__":
     genomes = []
 
     indir,outdir = arguments()
-    findOrthologs()
+    #findOrthologs()
     findParalogs()
