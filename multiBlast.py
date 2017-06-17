@@ -251,9 +251,6 @@ class Paralogs:
         return self.loadToTable(results)
 
 
-=======
-
->>>>>>> f3314c3d114e7d0fb83ff5a746e517fef9d73a2a
         #load into pandas dataframe
         #get things evalue lower other 2 higher than cutoff
         #ignore self hits (subj & target are same)
