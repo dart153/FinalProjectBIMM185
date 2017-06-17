@@ -230,7 +230,7 @@ class Paralogs:
         print(table.head())
         print(table.describe())
 
-        self.printParalogs(table)
+        self.writeParalogs(table)
     def runBlastP(self, g1):
 
         results = '{}/{}.tsv'.format(self.outdir,g1.name)
@@ -274,29 +274,11 @@ class Paralogs:
             #self.pairs.append([row[0], row[1]])
             scov = (float(row[4])/float(row[5]))*100
 
-            sseqid= re.match(r'\|*([\w\_\.]+)\|',str(row[1])).group(1)
-            table.set_value(index,'sseqid',sseqid)
-
-            qseqid = re.match(r'\|*([\w\_\.]+)\|*',str(row[0])).group(1)
-            table.set_value(index,'qseqid',sseqid)
-
-            # ignore self hits
-
-
-
-            scov= (float(row[4])/float(row[5]))*100
             table.set_value(index,'scov',scov)
 
         table = self.subset(table)
 
         return table
-
-
-    def BDBH(self,table):
-
-        #queries = self.table1.loc['qseqid'].unique()
-
-        print(table.describe())
 
 
     def subset(self, table):
@@ -310,12 +292,14 @@ class Paralogs:
 
         return comparisons
         
-    #
-    def printParalogs(self, table):
+    
+    def writeParalogs(self, table):
+        output = open('{}/{}_para.tsv'.format(self.outdir,self.g1.name),'w')
         for index, row in table.iterrows():
             if [row[1], row[0]] not in self.pairs:
                 self.pairs.append([row[0], row[1]])
-                print row
+                output.write(row['qseqid'] + '\t' + row['sseqid'] + '\t' + str(row['evalue']) + '\t' + str(row['ident']) + '\t' + str(row['scov']) + '\n')
+        output.close()
         
 
 
