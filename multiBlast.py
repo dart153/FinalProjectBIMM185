@@ -139,7 +139,7 @@ class Orthologs:
         for index,row in table.iterrows():
 
             #print(row)
-            sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+            sseqid= re.match(r'\|*([\w\_\.]+)\|',str(row[1])).group(1) # I changed this because mine didn't have the ref part (not sure why)
             table.set_value(index,'sseqid',sseqid)
 
             scov= (float(row[4])/float(row[5]))*100
@@ -157,26 +157,94 @@ class Orthologs:
 
 class Paralogs:
 
-    def __init__(self, genome):
+    def __init__(self, genome, outdir, evalue, ident, scov):
 
-        self.genome = genome
+        self.g1 = genome
+        self.outdir = outdir +'/results'
+        self.evalue = evalue
+        self.ident = ident
+        self.scov = scov
+        
+        self.columns = ['qseqid','sseqid','evalue','ident','length','slen']
+        
+        if not os.path.exists(self.outdir):
+            os.makedirs(self.outdir)
 
-    def runBlastP(self):
+        print('Evaluating {} for paralogs'.format(self.g1.name))
+        
+        #Run blast
+        table = self.runBlastP(self.g1)
 
-        pass
+        #Calculate orthologs
+        self.BDBH(table)
+
+    def runBlastP(self, g1):
+
+        results = '{}/{}.tsv'.format(self.outdir,g1.name)
+        
+        command = ''
+        if not os.path.exists(results):
+            #os.system('touch {}'.format(results))
+            if os.path.basename(g1.path).split('.')[-1] == 'gz':
+
+                command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
+                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen' ".format(g1.blastdb,self.evalue)
+
+            else:
+
+                command = 'blastp -query {} -out {} '.format(g1.path,results)
+                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen'".format(g1.blastdb,self.evalue)
+
+            os.system(command)
+            
+        return self.loadToTable(results)
+        
         #cmd = 'blastp -query %s -out blast_%s.out -db %s evalue %i perc_identity %s -outfmt \'6 qcovs\'' %
 
         #load into pandas dataframe
         #get things evalue lower other 2 higher than cutoff
         #ignore self hits (subj & target are same)
+        
+    def loadToTable(self,results):
+
+        table = pd.read_table(results,header=None,sep='\t',names=self.columns)
+
+        return self.processTable(table)
+        
+    def processTable(self,table):
+
+        table['scov'] = np.NaN
+
+        for index,row in table.iterrows():
+
+            sseqid= re.match(r'\|*([\w\_\.]+)\|',str(row[1])).group(1)
+            table.set_value(index,'sseqid',sseqid)
+            
+            qseqid = re.match(r'\|*([\w\_\.]+)\|*',str(row[0])).group(1)
+            table.set_value(index,'qseqid',sseqid)
+            
+            # ignore self hits
+
+            scov= (float(row[4])/float(row[5]))*100
+            table.set_value(index,'scov',scov)
+            #table = table[table.loc[index, sseqid] != table.loc[index, qseqid]]
+        print table.shape
+
+        print(table.head())
+
+        return table
+        
+    def BDBH(self,table):
+
+        #queries = self.table1.loc['qseqid'].unique()
+
+        print(table.describe())
 
 def getInputFiles(indir,inputFormat,outdir):
 
     global genomes
 
     for file in os.listdir(indir):
-
-        #print(os.path.basename(file))
 
         if not os.path.isdir(file):
 
@@ -349,6 +417,11 @@ def findOrthologs():
 
             ortholog = Orthologs(comp[0],comp[1],outdir,evalue,ident,scov)
 
+def findParalogs():
+
+    for genome in genomes:
+        paralog = Paralogs(genome,outdir,evalue,ident,scov)
+            
 if __name__ == "__main__":
 
     #global variables
@@ -364,3 +437,4 @@ if __name__ == "__main__":
 
     indir,outdir = arguments()
     findOrthologs()
+    findParalogs()
