@@ -91,26 +91,42 @@ class Orthologs:
         self.pident = pident
         self.scov = scov
 
-        #store the results
+        self.ortho_ab = {}
+        self.ortho_ba = {}
 
+
+        #store the results
         self.columns = ['qseqid','sseqid','evalue','pident','length','slen']
 
 
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
 
+        if not os.path.exists('{}/blast_results'.format(self.outdir)):
+
+            os.makedirs('{}/blast_results'.format(self.outdir))
+
         print('Evaluating {} and {} for orthologs'.format(self.g1.name,self.g2.name))
 
         #Run the blasts
+
+        #subject: g2;query: g1
         table1 = self.runBlastP(self.g1,self.g2)
+
+        #subject: g1;query: g2
         table2 = self.runBlastP(self.g2,self.g1)
 
         #Calculate orthologs
-        self.BDBH(table1,table2)
+        self.orthologTable = self.BDBH(table1,table2)
+
+        #print(self.orthologTable)
+
+        #print('ortho_ab: {}'.format(self.ortho_ab))
+        #print('ortho_ba: {}'.format(self.ortho_ba))
 
     def runBlastP(self,g1,g2):
 
-        results = '{}/{}_vs_{}.tsv'.format(self.outdir,g1.name,g2.name)
+        results = '{}/blast_results/{}_vs_{}.tsv'.format(self.outdir,g1.name,g2.name)
 
         command = ''
         if not os.path.exists(results):
@@ -153,6 +169,8 @@ class Orthologs:
 
     def BDBH(self,table1,table2):
 
+        orthologTable = pd.DataFrame(columns = self.columns)
+
         orthologs = open('{}/{}vs{}_ortho.txt'.format(self.outdir,self.g1.name,self.g2.name),'w+')
 
         orthologs.write('{}\t{}\n'.format('\t'.join(self.columns),'status'))
@@ -176,26 +194,66 @@ class Orthologs:
                         self.g1.removeHomolog(query)
                         self.g2.removeHomolog(subject)
 
+                        if subject not in self.ortho_ab:
+
+                            self.ortho_ab[subject] = []
+
+                        self.ortho_ab[subject].append(query)
+
+                        if query not in self.ortho_ba:
+
+                            self.ortho_ba[query] = []
+
+                        self.ortho_ba[query].append(subject)
+
+                        #print(subjectHits.iloc[0])
+
+                        #Add to table of orthologs
+                        orthologTable = orthologTable.append(subjectHits.iloc[0],ignore_index=True)
+
+                        #print(orthologTable)
+
                         #Write Pair to file
-                        orthologs.write('{}\t{}\n'.format(self.rowToString(subjectHits.iloc[0]),'BDBH'))
+                        orthologs.write('{}\t{}\n'.format(rowToString(subjectHits.iloc[0]),'BDBH'))
                     else:
 
-                        self.topHits(subjectHits,orthologs)
+                        orthologTable = self.topHits(subjectHits,orthologs,orthologTable)
 
         orthologs.close()
 
-    def topHits(self,table,file):
+        return orthologTable
+
+    def topHits(self,table,file,orthologTable):
 
         comparisons = table.loc[table['evalue'] == table['evalue'].iloc[0]]
 
         if comparisons.shape[0] > 0:
 
-            self.g2.removeHomolog(table['qseqid'].iloc[0])
-
             for index,row in comparisons.iterrows():
 
-                self.g1.removeHomolog(row['sseqid'])
-                file.write('{}\t{}\n'.format(self.rowToString(row),'TOP'))
+                subject = row['qseqid']
+                query = row['sseqid']
+
+                self.g2.removeHomolog(subject)
+                self.g1.removeHomolog(query)
+
+                if subject not in self.ortho_ab:
+
+                    self.ortho_ab[subject] = []
+
+                self.ortho_ab[subject].append(query)
+
+                if query not in self.ortho_ba:
+
+                    self.ortho_ba[query] = []
+
+                self.ortho_ba[query].append(subject)
+
+                orthologTable = orthologTable.append(row)
+
+                file.write('{}\t{}\n'.format(rowToString(row),'TOP'))
+
+        return orthologTable
 
 
     def subset(self,table,query):
@@ -210,11 +268,7 @@ class Orthologs:
 
         return comparisons
 
-    def rowToString(self,row):
 
-        row = row.tolist()
-
-        return '\t'.join([str(i) for i in row])
 
 # paralogs class
 class Paralogs:
@@ -236,6 +290,10 @@ class Paralogs:
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
 
+        if not os.path.exists('{}/blast_results'.format(self.outdir)):
+
+            os.makedirs('{}/blast_results'.format(self.outdir))
+
         #Run blast
         table = self.runBlastP(self.g1)
 
@@ -245,7 +303,7 @@ class Paralogs:
     def runBlastP(self, g1):
 
         # output for blast data
-        results = '{}/{}.tsv'.format(self.outdir,g1.name)
+        results = '{}/blast_results/{}.tsv'.format(self.outdir,g1.name)
 
         command = ''
         if not os.path.exists(results):
@@ -297,7 +355,6 @@ class Paralogs:
         comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
         comparisons = comparisons.loc[comparisons['ident'] >= self.ident]
         comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
-        comparisons = comparisons.loc[comparisons['qseqid'] != comparisons['sseqid']]
 
         # sort
         comparisons = comparisons.sort_values(['evalue','ident', 'scov'], ascending = [True, False, False])
@@ -311,12 +368,195 @@ class Paralogs:
         for index, row in table.iterrows():
             if row[0] != row[1]:
                 if [row[1], row[0]] not in self.pairs:
-                    self.g1.removeHomolog(row[0])
-                    self.g1.removeHomolog(row[1])
-                    self.pairs.append([row[0], row[1]])
-                    output.write(row['qseqid'] + '\t' + row['sseqid'] + '\t' + str(row['evalue']) + '\t' + str(row['ident']) + '\t' + str(row['scov']) + '\n')
+                    if [row[0],row[1]] not in self.pairs:
+
+                        self.pairs.append([row[0], row[1]])
+                        output.write('{}\n'.format(rowToString(row)))
+
         output.close()
 
+class Intersection:
+
+    def __init__(self,genomes,orthologs):
+
+        self.orthologs = orthologs
+        self.ref = orthologs[0].g1
+        self.genomes = genomes
+        self.orthologDict = {}
+        self.refComp = []
+        self.common = set()
+
+        self.loadGenomes(orthologs)
+        self.findCommon()
+        self.intersect(self.orthologs)
+
+    def loadGenomes(self,orthologs):
+
+        for ortholog in orthologs:
+
+            #dictionary to find all the ortholog instances with particular genome
+            if ortholog.g1.name not in self.orthologDict:
+
+                self.orthologDict[ortholog.g1.name] = {}
+
+            if ortholog.g2.name not in self.orthologDict:
+
+                self.orthologDict[ortholog.g2.name] = {}
+
+            self.orthologDict[ortholog.g1.name][ortholog.g2.name] = ortholog
+            self.orthologDict[ortholog.g2.name][ortholog.g1.name] = ortholog
+
+
+        #for key,value in self.orthologDict.iteritems():
+
+            #print('{}: {}'.format(key.name,';'.join('{},{}'.format(x.g1.name,x.g2.name) for x in value)))
+
+    def findCommon(self):
+
+        #get only the ortholog objects that contain the reference genome
+        self.refComp = self.orthologDict[self.ref.name]
+
+        #create a set of the reference proteins from the first ortholog object
+        orthologDF = self.refComp.values()[0].orthologTable
+
+        #print(orthologDF)
+
+        refList = orthologDF["sseqid"].tolist()
+        self.common = set(refList)
+
+
+    def intersect(self,orthologs):
+
+        #flag to indicate whether gene is shared
+        shared = 0
+
+
+        for genome in self.genomes:
+
+            if genome.name != self.ref.name:
+
+                print('{}\t{}'.format(self.ref.name,genome.name))
+
+                ortholog = self.orthologDict[self.ref.name][genome.name]
+
+                possibleCommon = self.getRefOrthologs(self.ref,ortholog)
+
+                self.common.intersection_update(possibleCommon)
+
+                if not self.common:
+
+                    print('Failed')
+
+                    return None
+
+        #Write the results to a file
+
+        print('\n'.join(list(self.common)))
+        '''
+        #get a dictionary of sets containing the corresponding orthologs for the non-ref genomes
+        orthologs = self.nonRefOrthologs(self.common)
+
+        for i in range(len(self.genomes)-1):
+            for j in range(i+1,len(self.genomes)):
+
+                g1 = self.genomes[i]
+                g2 = self.genomes[j]
+
+                comparisons = self.orthologDict[g1.name][g2.name]
+
+                #iterate row by row in the DataFrame
+                for index,row in comparisons:
+
+                    sseqid = row['sseqid']
+                    qseqid = row['qseqid']
+        '''
+
+
+    def nonRefOrthologs(self,common):
+
+        orthologs = {}
+
+        #loop through genomes
+        for genome in self.genomes:
+
+            orthologs[genome] = set()
+            #get the genes for which the refernce genes are orthologs
+            ortholog = self.orthologDict[self.ref][genome.name]
+
+            orthologs[genome] = self.getNonRefOrthologs(common,ortholog)
+
+        return orthologs
+
+    def getNonRefOrthologs(self,common,ortholog):
+
+        nonRefOrthologs = set()
+
+        orthologs = {}
+
+        if self.ref == ortholog.g1:
+
+            orthologs = ortholog.ortho_ab
+
+        else:
+
+            orthologs = ortholog.ortho_ba
+
+        for gene in common:
+
+            if gene in orthologs:
+
+                nonRefOrthologs.update(orthologs[gene])
+
+        return nonRefOrthologs
+
+    def getRefOrthologs(self,genome,ortholog):
+
+        #get the table of orthologs
+        orthologTable = ortholog.orthologTable
+
+        #prepare a set for the orthologs
+        orthologs = set()
+
+        if genome == ortholog.g1:
+
+            orthologs = set(orthologTable["sseqid"].tolist())
+
+        else:
+
+            orthologs = set(orthologTable["qseqid"].tolist())
+
+        return orthologs
+
+        #for gene in self.common:
+
+            #for genome in self.genomes:
+
+                #ortholog = self.orthologDict[self.ref.name][genome.name]
+
+                #if self.ref == ortholog.g1:
+
+                    #if gene in ortholog.orthologTable['sseqid']:
+
+                        #shared = 1
+                        #refOrthologs[gene] = "null"
+                    #else:
+
+                        #shared = 0
+
+                #if shared == 0:
+
+                    #break
+
+        #evaluate whether
+        #for shared == 1:
+
+
+
+def rowToString(row):
+
+    row = row.tolist()
+
+    return '\t'.join([str(i) for i in row])
 
 '''
 Determines the routine required depending on the input format.
@@ -505,12 +745,20 @@ Bi-Directional Best Hit (BDBH) and Top Hit.
 def findOrthologs():
 
     if len(genomes) > 1:
-        comparisons = itertools.combinations(genomes,2)
+        #comparisons = itertools.combinations(genomes,2)
 
+        orthologs = []
 
-        for comp in comparisons:
+        for i in range(len(genomes)-1):
+            for j in range(i+1,len(genomes)):
 
-            ortholog = Orthologs(comp[0],comp[1],outdir,evalue,ident,scov)
+                if genomes[i].name != genomes[j].name:
+
+                    ortholog = Orthologs(genomes[i],genomes[j],outdir,evalue,ident,scov)
+
+                    orthologs.append(ortholog)
+
+        return genomes[0].name,orthologs
 
 '''
 Creates an instance of the paralog class for each
@@ -540,6 +788,8 @@ def findOrphans():
 
         orphans.close
 
+
+
 '''
 Main Method
 
@@ -561,6 +811,14 @@ if __name__ == "__main__":
     genomes = []
 
     indir,outdir = arguments()
-    findOrthologs()
+
+    #Find orthologs
+    ref, orthologs = findOrthologs()
+
+    #Find paralogs
     findParalogs()
+
+    #Find orphaned genes
     findOrphans()
+
+    Intersection(genomes,orthologs)
