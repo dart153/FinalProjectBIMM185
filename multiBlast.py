@@ -14,8 +14,19 @@ import itertools
 from Bio import SeqIO
 import re
 
+'''
+Class Genome is used to store all the relavent data required for each Genome
+that is being compared. It also creates the BLAST database for each of the genomes.
+'''
 class Genome:
 
+    '''
+    Constructor for the genome class.
+
+    Parameters:
+        -path: path to the input file
+        -outdir: path to the output directory
+    '''
     def __init__(self,path,outdir):
 
         self.name = ''
@@ -29,12 +40,19 @@ class Genome:
         self.readFile()
         self.makeBlastDB()
 
+    '''
+    Retrieves the genome name from the input file name
+    '''
     def getName(self):
 
         filename = os.path.basename(self.path)
 
         self.name = re.match(r'([\w]+).',filename).group(1)
 
+    '''
+    Reads the input file and creates a list of all the proteins
+    availible in the file.
+    '''
     def readFile(self):
 
         if os.path.basename(self.path).split('.')[-1] == 'faa':
@@ -50,6 +68,9 @@ class Genome:
 
                     self.proteins.append(record.id)
 
+    '''
+    This function creates the BLAST database for the given genome file.
+    '''
     def makeBlastDB(self):
 
         self.blastdb = self.blastdb + '/{}'.format(self.name)
@@ -73,15 +94,33 @@ class Genome:
         os.system(command)
 
 
+    '''
+    This function removes the proteins that are found as orthologs in other genomes,so
+    that at the end of the program, so called 'orphan' genes may be found.
+    '''
     def removeHomolog(self,id):
 
         if id in self.proteins:
 
             self.proteins.remove(id)
 
-
+'''
+Class Orthologs is the class which runs blastp on every combination of
+genomes in order to determine the orthologs.
+'''
 class Orthologs:
 
+    '''
+    Constructor for the Orthologs class.
+
+    Parameters:
+        -genome1: the first genome object
+        -genome2: the second genome object
+        -outdir: the path to the output directory
+        -evalue: the maximum evalue to be considered for orthology
+        -pident: the minimum percent identity to be considered for orthology
+        -scov: the minimum subject coverage to be considered for orthology
+    '''
     def __init__(self,genome1,genome2,outdir,evalue,pident,scov):
 
         self.g1 = genome1
@@ -91,6 +130,7 @@ class Orthologs:
         self.pident = pident
         self.scov = scov
 
+        #dictionaries containing the orthologs for reference later
         self.ortho_ab = {}
         self.ortho_ba = {}
 
@@ -124,9 +164,13 @@ class Orthologs:
         #print('ortho_ab: {}'.format(self.ortho_ab))
         #print('ortho_ba: {}'.format(self.ortho_ba))
 
+    '''
+    Runs blastp on the current combination of genomes.
+    '''
     def runBlastP(self,g1,g2):
 
-        results = '{}/blast_results/{}_vs_{}.tsv'.format(self.outdir,g1.name,g2.name)
+        #initialize the output file name for the blastp results
+        results = '{}/blast_results/{}_vs_{}.tsv'.format(self.outdir,g2.name,g1.name)
 
         command = ''
         if not os.path.exists(results):
@@ -146,12 +190,20 @@ class Orthologs:
         #Read into table
         return self.loadToTable(results)
 
+    '''
+    Loads the output of blastp into PANDAS tables
+    '''
     def loadToTable(self,results):
 
         table = pd.read_table(results,header=None,sep='\t',names=self.columns)
 
         return self.processTable(table)
 
+    '''
+    Process the table by adding the column 'scov' (subject coverage) and calculating
+    the subject coverage. Also process the subject ids to not include 'ref' in
+    the name.
+    '''
     def processTable(self,table):
 
         table['scov'] = np.NaN
@@ -167,6 +219,10 @@ class Orthologs:
 
         return table
 
+    '''
+    The Bi-Directional Best Hit (BDBH) function of the Ortholog class. Is the
+    highest level of confidence for orthology in this program.
+    '''
     def BDBH(self,table1,table2):
 
         orthologTable = pd.DataFrame(columns = self.columns)
@@ -223,6 +279,10 @@ class Orthologs:
 
         return orthologTable
 
+    '''
+    topHits is the function for the Top Hits method of orthology. It provides
+    the lowest level of confidence for orthology.
+    '''
     def topHits(self,table,file,orthologTable):
 
         comparisons = table.loc[table['evalue'] == table['evalue'].iloc[0]]
@@ -255,7 +315,10 @@ class Orthologs:
 
         return orthologTable
 
-
+    '''
+    The subset function returns a subset of the table which contains all the
+    entries which could be potential orthologs in the blastp results.
+    '''
     def subset(self,table,query):
 
         #Subset the table based on each of the parameters
@@ -270,10 +333,21 @@ class Orthologs:
 
 
 
-# paralogs class
+'''
+Class Paralogs evaluates potential paralogs within any given genome.
+'''
 class Paralogs:
 
-    # constructor
+    '''
+    Constructor for the Paralogs class.
+
+    Parameters:
+        -genome: the genome object for which paralogs are being evaluated
+        -outdir: the path to the output directory
+        -evalue: the maximum evalue to be considered for parology
+        -ident: the minimum percent identity to be considered for parolgy
+        -scov: the minimum subject coverage to be considered for parology
+    '''
     def __init__(self, genome, outdir, evalue, ident, scov):
 
         self.g1 = genome
@@ -294,12 +368,17 @@ class Paralogs:
 
             os.makedirs('{}/blast_results'.format(self.outdir))
 
+        print('Evaluating {} for Paralogs'.format(self.g1.name))
+
         #Run blast
         table = self.runBlastP(self.g1)
 
         # write paralog data to a file
         self.writeParalogs(table)
 
+    '''
+    Runs blastp using a genome and it's associated BLAST database.
+    '''
     def runBlastP(self, g1):
 
         # output for blast data
@@ -323,7 +402,9 @@ class Paralogs:
 
         return self.loadToTable(results)
 
-
+    '''
+    Loads the output of blastp into PANDAS tables
+    '''
     def loadToTable(self,results):
 
         # load raw data into pandas table
@@ -331,6 +412,11 @@ class Paralogs:
 
         return self.processTable(table)
 
+    '''
+    Process the table by adding the column 'scov' (subject coverage) and calculating
+    the subject coverage. Also process the subject ids to not include 'ref' in
+    the name.
+    '''
     def processTable(self,table):
 
         # get scov values
@@ -349,7 +435,10 @@ class Paralogs:
 
         return table
 
-
+    '''
+    The subset function returns a subset of the table which contains all the
+    entries which could be potential orthologs in the blastp results.
+    '''
     def subset(self, table):
         comparisons = table
         comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
@@ -361,7 +450,9 @@ class Paralogs:
 
         return comparisons
 
-
+    '''
+    Writes the paralogs to the output file.
+    '''
     def writeParalogs(self, table):
         # write to tab separated output file
         output = open('{}/{}_para.tsv'.format(self.outdir,self.g1.name),'w')
@@ -374,22 +465,40 @@ class Paralogs:
                         output.write('{}\n'.format(rowToString(row)))
 
         output.close()
-
+'''
+Class Intersection finds the protiens that have orthologs in all of the genomes.
+All results are outputed as the ID of a protein in the reference genome.
+'''
 class Intersection:
 
-    def __init__(self,genomes,orthologs):
+    '''
+    Constructor for Intersection class.
+
+    Parameters:
+        -genomes: a list of all the genome objects
+        -orthologs: a list of all the ortholog objects
+    '''
+    def __init__(self,genomes,orthologs,outdir):
 
         self.orthologs = orthologs
         self.ref = orthologs[0].g1
         self.genomes = genomes
+        self.outfile = outdir + '/results/intersection.txt'
+
         self.orthologDict = {}
         self.refComp = []
         self.common = set()
+
+        print('Finding Intersection of Genomes')
 
         self.loadGenomes(orthologs)
         self.findCommon()
         self.intersect(self.orthologs)
 
+    '''
+    Creates a 2D dictionary which allows any ortholog object to be found easily
+    when trying to find the intersection of all the genomes.
+    '''
     def loadGenomes(self,orthologs):
 
         for ortholog in orthologs:
@@ -411,6 +520,9 @@ class Intersection:
 
             #print('{}: {}'.format(key.name,';'.join('{},{}'.format(x.g1.name,x.g2.name) for x in value)))
 
+    '''
+    Creates an initial set of sequence ids
+    '''
     def findCommon(self):
 
         #get only the ortholog objects that contain the reference genome
@@ -425,6 +537,9 @@ class Intersection:
         self.common = set(refList)
 
 
+    '''
+    Find the intersection of the proteins that are found as orthologs
+    '''
     def intersect(self,orthologs):
 
         #flag to indicate whether gene is shared
@@ -435,8 +550,6 @@ class Intersection:
 
             if genome.name != self.ref.name:
 
-                print('{}\t{}'.format(self.ref.name,genome.name))
-
                 ortholog = self.orthologDict[self.ref.name][genome.name]
 
                 possibleCommon = self.getRefOrthologs(self.ref,ortholog)
@@ -445,70 +558,21 @@ class Intersection:
 
                 if not self.common:
 
-                    print('Failed')
+                    print('No Common Orthologs')
 
                     return None
 
         #Write the results to a file
 
-        print('\n'.join(list(self.common)))
-        '''
-        #get a dictionary of sets containing the corresponding orthologs for the non-ref genomes
-        orthologs = self.nonRefOrthologs(self.common)
+        intersectFile = open(self.outfile,'w')
 
-        for i in range(len(self.genomes)-1):
-            for j in range(i+1,len(self.genomes)):
+        intersectFile.write('\n'.join(list(self.common)))
 
-                g1 = self.genomes[i]
-                g2 = self.genomes[j]
+        intersectFile.close()
 
-                comparisons = self.orthologDict[g1.name][g2.name]
-
-                #iterate row by row in the DataFrame
-                for index,row in comparisons:
-
-                    sseqid = row['sseqid']
-                    qseqid = row['qseqid']
-        '''
-
-
-    def nonRefOrthologs(self,common):
-
-        orthologs = {}
-
-        #loop through genomes
-        for genome in self.genomes:
-
-            orthologs[genome] = set()
-            #get the genes for which the refernce genes are orthologs
-            ortholog = self.orthologDict[self.ref][genome.name]
-
-            orthologs[genome] = self.getNonRefOrthologs(common,ortholog)
-
-        return orthologs
-
-    def getNonRefOrthologs(self,common,ortholog):
-
-        nonRefOrthologs = set()
-
-        orthologs = {}
-
-        if self.ref == ortholog.g1:
-
-            orthologs = ortholog.ortho_ab
-
-        else:
-
-            orthologs = ortholog.ortho_ba
-
-        for gene in common:
-
-            if gene in orthologs:
-
-                nonRefOrthologs.update(orthologs[gene])
-
-        return nonRefOrthologs
-
+    '''
+    Returns a set of protein ids that are of the genome provided
+    '''
     def getRefOrthologs(self,genome,ortholog):
 
         #get the table of orthologs
@@ -527,31 +591,10 @@ class Intersection:
 
         return orthologs
 
-        #for gene in self.common:
 
-            #for genome in self.genomes:
-
-                #ortholog = self.orthologDict[self.ref.name][genome.name]
-
-                #if self.ref == ortholog.g1:
-
-                    #if gene in ortholog.orthologTable['sseqid']:
-
-                        #shared = 1
-                        #refOrthologs[gene] = "null"
-                    #else:
-
-                        #shared = 0
-
-                #if shared == 0:
-
-                    #break
-
-        #evaluate whether
-        #for shared == 1:
-
-
-
+'''
+A Function to turn a row in a PANDAS dataframe to a string
+'''
 def rowToString(row):
 
     row = row.tolist()
@@ -821,4 +864,4 @@ if __name__ == "__main__":
     #Find orphaned genes
     findOrphans()
 
-    Intersection(genomes,orthologs)
+    Intersection(genomes,orthologs,outdir)
