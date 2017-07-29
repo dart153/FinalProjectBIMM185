@@ -130,9 +130,7 @@ class Orthologs:
         self.pident = pident
         self.scov = scov
 
-        #dictionaries containing the orthologs for reference later
-        self.ortho_ab = {}
-        self.ortho_ba = {}
+        self.status = {}
 
 
         #store the results
@@ -170,7 +168,7 @@ class Orthologs:
     def runBlastP(self,g1,g2):
 
         #initialize the output file name for the blastp results
-        results = '{}/blast_results/{}_vs_{}.tsv'.format(self.outdir,g2.name,g1.name)
+        results = '{}/blast_results/{}_vs_{}.tsv'.format(self.outdir,g1.name,g2.name)
 
         command = ''
         if not os.path.exists(results):
@@ -225,11 +223,12 @@ class Orthologs:
     '''
     def BDBH(self,table1,table2):
 
+
         orthologTable = pd.DataFrame(columns = self.columns)
 
-        orthologs = open('{}/{}vs{}_ortho.txt'.format(self.outdir,self.g1.name,self.g2.name),'w+')
+        orthologs = open('{}/{}_vs_{}_ortho.tsv'.format(self.outdir,self.g2.name,self.g1.name),'w+')
 
-        orthologs.write('{}\t{}\n'.format('\t'.join(self.columns),'status'))
+        orthologs.write('{}\t{}\n'.format('\t'.join(self.columns),'status(BDBH/TOP)'))
 
         queries = table1.qseqid.unique()
 
@@ -250,30 +249,28 @@ class Orthologs:
                         self.g1.removeHomolog(query)
                         self.g2.removeHomolog(subject)
 
-                        if subject not in self.ortho_ab:
 
-                            self.ortho_ab[subject] = []
 
-                        self.ortho_ab[subject].append(query)
+                        if subject not in self.status:
 
-                        if query not in self.ortho_ba:
+                            self.status[subject] = {}
 
-                            self.ortho_ba[query] = []
+                        self.status[subject][query] = 'BDBH'
 
-                        self.ortho_ba[query].append(subject)
-
-                        #print(subjectHits.iloc[0])
 
                         #Add to table of orthologs
                         orthologTable = orthologTable.append(subjectHits.iloc[0],ignore_index=True)
 
-                        #print(orthologTable)
 
                         #Write Pair to file
-                        orthologs.write('{}\t{}\n'.format(rowToString(subjectHits.iloc[0]),'BDBH'))
+                        #orthologs.write('{}\t{}\n'.format(rowToString(subjectHits.iloc[0]),'BDBH'))
                     else:
 
                         orthologTable = self.topHits(subjectHits,orthologs,orthologTable)
+
+
+        #print the table
+        self.printTable(orthologTable,orthologs)
 
         orthologs.close()
 
@@ -291,27 +288,33 @@ class Orthologs:
 
             for index,row in comparisons.iterrows():
 
-                subject = row['qseqid']
                 query = row['sseqid']
+                subject = row['qseqid']
 
-                self.g2.removeHomolog(subject)
                 self.g1.removeHomolog(query)
+                self.g2.removeHomolog(subject)
 
-                if subject not in self.ortho_ab:
 
-                    self.ortho_ab[subject] = []
 
-                self.ortho_ab[subject].append(query)
+                #file.write('{}\t{}\n'.format(rowToString(row),'TOP'))
 
-                if query not in self.ortho_ba:
+                if subject not in self.status:
 
-                    self.ortho_ba[query] = []
+                    orthologTable = orthologTable.append(row,ignore_index=True)
+                    self.status[subject] = {}
 
-                self.ortho_ba[query].append(subject)
+                    self.status[subject][query] = 'TOP'
+                else:
 
-                orthologTable = orthologTable.append(row)
+                    if query not in self.status[subject]:
 
-                file.write('{}\t{}\n'.format(rowToString(row),'TOP'))
+                        orthologTable = orthologTable.append(row,ignore_index=True)
+                        
+                        self.status[subject][query] = 'TOP'
+                    else:
+
+                        self.status[subject][query] = 'BDBH/TOP'
+
 
         return orthologTable
 
@@ -332,6 +335,13 @@ class Orthologs:
         return comparisons
 
 
+    def printTable(self,table,output):
+
+        for index,row in table.iterrows():
+
+            status = self.status[row['qseqid']][row['sseqid']]
+
+            output.write('{}\t{}\n'.format(rowToString(row),status))
 
 '''
 Class Paralogs evaluates potential paralogs within any given genome.
