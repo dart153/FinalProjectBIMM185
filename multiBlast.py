@@ -439,8 +439,11 @@ class Paralogs:
 
             scov = (float(row[4])/float(row[5]))*100
             table.set_value(index,'scov',scov)
-
-            sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+            sseqid = ''
+            try:
+                sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+            except AttributeError:
+                sseqid = row[1]
             table.set_value(index,'sseqid',sseqid)
 
         # get values in the range we want
