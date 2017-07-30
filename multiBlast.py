@@ -208,8 +208,11 @@ class Orthologs:
 
         for index,row in table.iterrows():
 
-            #print(row)
-            sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+            sseqid = ''
+            try:
+                sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+            except AttributeError:
+                sseqid = row[1]
             table.set_value(index,'sseqid',sseqid)
 
             scov= (float(row[4])/float(row[5]))*100
@@ -309,7 +312,7 @@ class Orthologs:
                     if query not in self.status[subject]:
 
                         orthologTable = orthologTable.append(row,ignore_index=True)
-                        
+
                         self.status[subject][query] = 'TOP'
                     else:
 
