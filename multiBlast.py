@@ -179,7 +179,7 @@ class Orthologs:
             else:
 
                 command = 'blastp -query {} -out {} '.format(g1.path,results)
-                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen qcovs'".format(g2.blastdb,self.evalue)
+                command += "-db {} -evalue  -use_sw_tback -comp_based_stats T -max_hsps 1 {} -outfmt '6 qseqid sseqid evalue pident length qlen slen qcovs'".format(g2.blastdb,self.evalue)
 
             os.system(command)
 
@@ -879,4 +879,4 @@ if __name__ == "__main__":
     #Find orphaned genes
     findOrphans()
 
-    Intersection(genomes,orthologs,outdir)
+    A_001029675_vs_GCA_001029635.tsv
