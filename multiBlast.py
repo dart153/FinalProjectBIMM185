@@ -121,20 +121,20 @@ class Orthologs:
         -pident: the minimum percent identity to be considered for orthology
         -scov: the minimum subject coverage to be considered for orthology
     '''
-    def __init__(self,genome1,genome2,outdir,evalue,pident,scov):
+    def __init__(self,genome1,genome2,outdir,evalue,pident,cov):
 
         self.g1 = genome1
         self.g2 = genome2
         self.outdir = outdir +'/results'
         self.evalue = evalue
         self.pident = pident
-        self.scov = scov
+        self.cov = cov
 
         self.status = {}
 
 
         #store the results
-        self.columns = ['qseqid','sseqid','evalue','pident','length','slen']
+        self.columns = ['qseqid','sseqid','evalue','pident','length','slen','qcovs']
 
 
         if not os.path.exists(self.outdir):
@@ -154,13 +154,11 @@ class Orthologs:
         #subject: g1;query: g2
         table2 = self.runBlastP(self.g2,self.g1)
 
+        self.columns.append('scov')
+
         #Calculate orthologs
         self.orthologTable = self.BDBH(table1,table2)
 
-        #print(self.orthologTable)
-
-        #print('ortho_ab: {}'.format(self.ortho_ab))
-        #print('ortho_ba: {}'.format(self.ortho_ba))
 
     '''
     Runs blastp on the current combination of genomes.
@@ -176,12 +174,12 @@ class Orthologs:
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
                 command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
-                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen' ".format(g2.blastdb,self.evalue)
+                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen qcovs' ".format(g2.blastdb,self.evalue)
 
             else:
 
                 command = 'blastp -query {} -out {} '.format(g1.path,results)
-                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen'".format(g2.blastdb,self.evalue)
+                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen qcovs'".format(g2.blastdb,self.evalue)
 
             os.system(command)
 
@@ -205,6 +203,7 @@ class Orthologs:
     def processTable(self,table):
 
         table['scov'] = np.NaN
+
 
         for index,row in table.iterrows():
 
@@ -259,7 +258,6 @@ class Orthologs:
                             self.status[subject] = {}
 
                         self.status[subject][query] = 'BDBH'
-
 
                         #Add to table of orthologs
                         orthologTable = orthologTable.append(subjectHits.iloc[0],ignore_index=True)
@@ -331,9 +329,9 @@ class Orthologs:
         comparisons = table.loc[table['qseqid'] == query]
         comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
         comparisons = comparisons.loc[comparisons['pident'] >= self.pident]
-        comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
+        comparisons = comparisons.loc[(comparisons['scov'] >= self.cov) | (comparisons['qcovs'] >= self.cov)]
 
-        comparisons = comparisons.sort_values(['evalue','pident','scov'], ascending=[True,False,False])
+        comparisons = comparisons.sort_values(['evalue','pident','scov','qcovs'], ascending=[True,False,False,False])
 
         return comparisons
 
@@ -361,17 +359,17 @@ class Paralogs:
         -ident: the minimum percent identity to be considered for parolgy
         -scov: the minimum subject coverage to be considered for parology
     '''
-    def __init__(self, genome, outdir, evalue, ident, scov):
+    def __init__(self, genome, outdir, evalue, ident,cov):
 
         self.g1 = genome
         self.outdir = outdir +'/results'
         self.evalue = evalue
         self.ident = ident
-        self.scov = scov
+        self.cov = cov
         self.pairs = []
 
         # columns for paralogs
-        self.columns = ['qseqid','sseqid','evalue','ident','length','slen']
+        self.columns = ['qseqid','sseqid','evalue','ident','length','slen','qcovs']
 
         # make output directory
         if not os.path.exists(self.outdir):
@@ -404,12 +402,12 @@ class Paralogs:
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
                 command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
-                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen' ".format(g1.blastdb,self.evalue)
+                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen qcovs' ".format(g1.blastdb,self.evalue)
 
             else:
 
                 command = 'blastp -query {} -out {} '.format(g1.path,results)
-                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen'".format(g1.blastdb,self.evalue)
+                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen qcovs'".format(g1.blastdb,self.evalue)
 
             os.system(command)
 
@@ -434,6 +432,7 @@ class Paralogs:
 
         # get scov values
         table['scov'] = np.NaN
+        self.columns.append('scov')
 
         for index,row in table.iterrows():
 
@@ -459,10 +458,10 @@ class Paralogs:
         comparisons = table
         comparisons = comparisons.loc[comparisons['evalue'] <= self.evalue]
         comparisons = comparisons.loc[comparisons['ident'] >= self.ident]
-        comparisons = comparisons.loc[comparisons['scov'] >= self.scov]
+        comparisons = comparisons.loc[(comparisons['scov'] >= self.cov) | (comparisons['qcovs'] >= self.cov)]
 
         # sort
-        comparisons = comparisons.sort_values(['evalue','ident', 'scov'], ascending = [True, False, False])
+        comparisons = comparisons.sort_values(['evalue','ident', 'scov','qcovs'], ascending = [True, False, False,False])
 
         return comparisons
 
@@ -679,7 +678,7 @@ def arguments():
     global inputFormat
     global evalue
     global ident
-    global scov
+    global cov
 
     desc = "A generalized tool for performing blasts on any number of genomes to determine homology."
 
@@ -708,12 +707,12 @@ def arguments():
                         type=float,
                         default=25.0,
                         help='The minimum percent identity to be considered for homology.')
-    parser.add_argument('-scov',
+    parser.add_argument('-cov',
                         action='store',
-                        dest='scov',
+                        dest='cov',
                         type=float,
                         default=80.0,
-                        help='The minimum percentage of the smaller protein covered.')
+                        help='The minimum percentage of coverage for either protein.')
 
     args = parser.parse_args()
 
@@ -722,7 +721,7 @@ def arguments():
     inputFormat = args.inputFormat
     evalue = args.eval
     ident = args.ident
-    scov = args.scov
+    cov = args.cov
 
     #Check for input directory
     if not validateDir(indir):
@@ -813,7 +812,7 @@ def findOrthologs():
 
                 if genomes[i].name != genomes[j].name:
 
-                    ortholog = Orthologs(genomes[i],genomes[j],outdir,evalue,ident,scov)
+                    ortholog = Orthologs(genomes[i],genomes[j],outdir,evalue,ident,cov)
 
                     orthologs.append(ortholog)
 
@@ -827,7 +826,7 @@ based on the user-inputed parameters.
 def findParalogs():
 
     for genome in genomes:
-        paralog = Paralogs(genome,outdir,evalue,ident,scov)
+        paralog = Paralogs(genome,outdir,evalue,ident,cov)
 
 '''
 Compiles the orphan genes of each genome into a
@@ -863,7 +862,7 @@ if __name__ == "__main__":
     global inputFormat
     global evalue
     global ident
-    global scov
+    global cov
     global genomes
 
 
