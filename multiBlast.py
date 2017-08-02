@@ -134,7 +134,7 @@ class Orthologs:
 
 
         #store the results
-        self.columns = ['qseqid','sseqid','evalue','pident','length','slen','qcovs']
+        self.columns = ['qseqid','sseqid','evalue','pident','length','qlen','slen','qcovs']
 
 
         if not os.path.exists(self.outdir):
@@ -168,18 +168,18 @@ class Orthologs:
         #initialize the output file name for the blastp results
         results = '{}/blast_results/{}_vs_{}.tsv'.format(self.outdir,g1.name,g2.name)
 
-        command = ''
+        command = "blastp -out {} -db {} -evalue {} -use_sw_tback -comp_based_stats T -max_hsps 1 ".format(results,g2.blastdb,self.evalue)
+        command += "-outfmt '6 qseqid sseqid evalue pident length qlen slen qcovs'"
+
         if not os.path.exists(results):
 
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
-                command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
-                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen qcovs' ".format(g2.blastdb,self.evalue)
+                command = 'gzcat {} | {}'.format(g1.path,command)
 
             else:
 
-                command = 'blastp -query {} -out {} '.format(g1.path,results)
-                command += "-db {} -evalue  -use_sw_tback -comp_based_stats T -max_hsps 1 {} -outfmt '6 qseqid sseqid evalue pident length qlen slen qcovs'".format(g2.blastdb,self.evalue)
+                command = '{} -query {}'.format(command,g1.path)
 
             os.system(command)
 
@@ -369,7 +369,7 @@ class Paralogs:
         self.pairs = []
 
         # columns for paralogs
-        self.columns = ['qseqid','sseqid','evalue','ident','length','slen','qcovs']
+        self.columns = ['qseqid','sseqid','evalue','ident','length','qlen','slen','qcovs']
 
         # make output directory
         if not os.path.exists(self.outdir):
@@ -384,6 +384,8 @@ class Paralogs:
         #Run blast
         table = self.runBlastP(self.g1)
 
+        self.columns.append('scov')
+
         # write paralog data to a file
         self.writeParalogs(table)
 
@@ -395,19 +397,18 @@ class Paralogs:
         # output for blast data
         results = '{}/blast_results/{}.tsv'.format(self.outdir,g1.name)
 
-        command = ''
+        command = "blastp -out {} -db {} -evalue {} -use_sw_tback -comp_based_stats T -max_hsps 1 ".format(results,g1.blastdb,self.evalue)
+        command += "-outfmt '6 qseqid sseqid evalue pident length qlen slen qcovs'"
+
         if not os.path.exists(results):
 
-            # check if compressed
             if os.path.basename(g1.path).split('.')[-1] == 'gz':
 
-                command = 'gzcat {} | blastp -out {} '.format(g1.path,results)
-                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen qcovs' ".format(g1.blastdb,self.evalue)
+                command = 'gzcat {} | {}'.format(g1.path,command)
 
             else:
 
-                command = 'blastp -query {} -out {} '.format(g1.path,results)
-                command += "-db {} -evalue {} -outfmt '6 qseqid sseqid evalue pident length slen qcovs'".format(g1.blastdb,self.evalue)
+                command = '{} -query {}'.format(command,g1.path)
 
             os.system(command)
 
@@ -432,7 +433,6 @@ class Paralogs:
 
         # get scov values
         table['scov'] = np.NaN
-        self.columns.append('scov')
 
         for index,row in table.iterrows():
 
@@ -471,6 +471,9 @@ class Paralogs:
     def writeParalogs(self, table):
         # write to tab separated output file
         output = open('{}/{}_para.tsv'.format(self.outdir,self.g1.name),'w')
+
+        output.write('{}\n'.format('\t'.join(self.columns)))
+
         for index, row in table.iterrows():
             if row[0] != row[1]:
                 if [row[1], row[0]] not in self.pairs:
@@ -879,4 +882,4 @@ if __name__ == "__main__":
     #Find orphaned genes
     findOrphans()
 
-    A_001029675_vs_GCA_001029635.tsv
+    Intersection(genomes,orthologs,outdir)
