@@ -209,7 +209,7 @@ class Orthologs:
 
             sseqid = ''
             try:
-                sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+                sseqid= re.match(r'[\w]+\|([\w\_\.]+)\|',str(row[1])).group(1)
             except AttributeError:
                 sseqid = row[1]
             table.set_value(index,'sseqid',sseqid)
@@ -440,7 +440,7 @@ class Paralogs:
             table.set_value(index,'scov',scov)
             sseqid = ''
             try:
-                sseqid= re.match(r'ref\|([\w\_\.]+)\|',str(row[1])).group(1)
+                sseqid= re.match(r'[\w]+\|([\w\_\.]+)\|',str(row[1])).group(1)
             except AttributeError:
                 sseqid = row[1]
             table.set_value(index,'sseqid',sseqid)
